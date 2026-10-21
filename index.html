@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQL-стенд · PostgreSQL · Сеть лабораторий</title>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1c2a3a; --line:#26384c;
+    --ink:#e6eef5; --ink-dim:#8ba0b3; --ink-faint:#5c7188;
+    --accent:#5b9bd5; --accent-bright:#7db8ec; --accent-dim:#2f5f8a; --amber:#f0b429;
+    --red:#f2637e; --green:#3ecf8e;
+    --mono:'SF Mono',ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+  .app{display:grid;grid-template-columns:300px 1fr;height:100vh;overflow:hidden}
+  @media(max-width:820px){.app{grid-template-columns:1fr;height:auto}}
+
+  .side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  .brand{padding:18px 20px 14px;border-bottom:1px solid var(--line)}
+  .brand h1{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .pg{width:20px;height:20px;flex:0 0 20px}
+  .brand .sub{margin:7px 0 0;font-size:11px;color:var(--ink-faint);font-family:var(--mono)}
+  .brand .sub b{color:var(--accent-bright);font-weight:600}
+  .side-scroll{overflow-y:auto;flex:1;padding:8px 0 20px}
+  .grp-title{font-size:10.5px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-faint);padding:14px 20px 6px;font-weight:600}
+
+  .task{margin:2px 10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:.12s}
+  .task:hover{background:var(--panel2)}
+  .task.on{background:var(--panel2);border-color:var(--accent-dim)}
+  .lv{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.04em}
+  .lv.b{background:rgba(62,207,142,.14);color:var(--green)}
+  .lv.m{background:rgba(240,180,41,.14);color:var(--amber)}
+  .lv.a{background:rgba(242,99,126,.14);color:var(--red)}
+  .task .nm{font-size:13px;font-weight:550;margin-top:5px;color:var(--ink)}
+
+  .schema-box{margin:6px 14px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .schema-box summary{padding:9px 12px;cursor:pointer;font-size:11.5px;color:var(--ink-dim);list-style:none;user-select:none;font-weight:600}
+  .schema-box summary::-webkit-details-marker{display:none}
+  .schema-box summary:before{content:'▸ ';color:var(--accent)}
+  .schema-box[open] summary:before{content:'▾ '}
+  .tbl{padding:0 12px 6px}
+  .tbl .tn{font-family:var(--mono);font-size:11.5px;color:var(--accent-bright);margin-top:8px;font-weight:600}
+  .tbl .cols{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);padding-left:8px;line-height:1.7}
+
+  .main{display:flex;flex-direction:column;overflow:hidden}
+  .prompt{padding:18px 26px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--panel) 0%,var(--bg) 100%)}
+  .prompt .meta{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .prompt h2{margin:0;font-size:17px;font-weight:640;letter-spacing:-.015em}
+  .prompt p{margin:8px 0 0;color:var(--ink-dim);max-width:70ch;font-size:13.5px}
+
+  .editor-wrap{padding:16px 26px 0;display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:8px 16px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer;transition:.12s}
+  .btn:hover{border-color:var(--ink-faint)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.run{background:var(--accent);color:#08243b;border-color:var(--accent)}
+  .btn.run:hover:not(:disabled){background:var(--accent-bright)}
+  .btn.ghost{background:transparent}
+  .hint{font-size:11.5px;color:var(--ink-faint);margin-left:auto;font-family:var(--mono)}
+  kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px}
+
+  textarea{width:100%;min-height:150px;resize:vertical;background:#0b131c;color:var(--ink);
+    border:1px solid var(--line);border-radius:9px;padding:14px 16px;font-family:var(--mono);
+    font-size:13.5px;line-height:1.65;tab-size:2;outline:none}
+  textarea:focus{border-color:var(--accent-dim);box-shadow:0 0 0 3px rgba(91,155,213,.1)}
+
+  .results{flex:1;overflow:auto;padding:6px 26px 26px}
+  .status{font-size:12.5px;font-family:var(--mono);padding:8px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .status .ok{color:var(--green)} .status .err{color:var(--red)} .status .muted{color:var(--ink-faint)}
+  .match{padding:3px 10px;border-radius:5px;font-weight:700;font-size:11.5px}
+  .match.yes{background:rgba(62,207,142,.15);color:var(--green)}
+  .match.no{background:rgba(242,99,126,.15);color:var(--red)}
+  .match.warn{background:rgba(240,180,41,.15);color:var(--amber)}
+
+  table.grid{border-collapse:collapse;font-family:var(--mono);font-size:12.5px;width:auto;min-width:100%}
+  table.grid th{position:sticky;top:0;background:var(--panel2);color:var(--accent-bright);text-align:left;
+    padding:7px 14px;border-bottom:2px solid var(--accent-dim);font-weight:600;white-space:nowrap}
+  table.grid td{padding:6px 14px;border-bottom:1px solid var(--line);white-space:nowrap;color:var(--ink)}
+  table.grid tr:hover td{background:rgba(28,42,58,.5)}
+  .nullv{color:var(--ink-faint);font-style:italic}
+
+  .errbox{background:rgba(242,99,126,.08);border:1px solid rgba(242,99,126,.3);border-radius:8px;
+    padding:12px 16px;font-family:var(--mono);font-size:12.5px;color:var(--red);white-space:pre-wrap}
+
+  .sol{margin-top:18px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .sol summary{padding:11px 16px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--amber);
+    list-style:none;user-select:none;background:var(--panel)}
+  .sol summary::-webkit-details-marker{display:none}
+  .sol summary:before{content:'🔒 ';font-size:11px}
+  .sol[open] summary:before{content:'🔓 '}
+  .sol pre{margin:0;padding:14px 16px;background:#0b131c;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--ink);overflow-x:auto}
+
+  .boot{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:50;transition:opacity .4s}
+  .boot.gone{opacity:0;pointer-events:none}
+  .boot .ring{width:44px;height:44px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 0.9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .boot .msg{font-family:var(--mono);font-size:13px;color:var(--ink-dim)}
+  .boot .msg b{color:var(--accent-bright)}
+  .boot .err{color:var(--red);max-width:440px;text-align:center;font-family:var(--mono);font-size:12.5px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="boot" id="boot">
+  <div class="ring" id="bootRing"></div>
+  <div class="msg" id="bootMsg">Загрузка <b>PostgreSQL</b> (WASM)…</div>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <h1>
+        <svg class="pg" viewBox="0 0 24 24" fill="none" stroke="#7db8ec" stroke-width="1.7"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg>
+        SQL-стенд · Лаборатории
+      </h1>
+      <div class="sub">движок: <b>PostgreSQL</b> · PGlite WASM</div>
+    </div>
+    <div class="side-scroll">
+      <details class="schema-box">
+        <summary>Схема базы</summary>
+        <div class="tbl" id="schemaList"></div>
+      </details>
+      <div id="taskNav"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="prompt">
+      <div class="meta" id="pMeta"></div>
+      <h2 id="pTitle">—</h2>
+      <p id="pText"></p>
+    </div>
+    <div class="editor-wrap">
+      <div class="toolbar">
+        <button class="btn run" id="runBtn" disabled>▶ Выполнить</button>
+        <button class="btn ghost" id="clearBtn">Очистить</button>
+        <button class="btn ghost" id="checkBtn">Сверить с эталоном</button>
+        <span class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> — выполнить</span>
+      </div>
+      <textarea id="sql" spellcheck="false" placeholder="Пишите SQL здесь…"></textarea>
+    </div>
+    <div class="results">
+      <div class="status" id="status"><span class="muted">—</span></div>
+      <div id="out"></div>
+      <details class="sol" id="solBox" style="display:none">
+        <summary>Показать эталонное решение</summary>
+        <pre id="solText"></pre>
+      </details>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+import { PGlite } from 'https://cdn.jsdelivr.net/npm/@electric-sql/pglite/dist/index.js';
+
+const SCHEMA = "-- \u0421\u0435\u0442\u044c \u043c\u0435\u0434\u0438\u0446\u0438\u043d\u0441\u043a\u0438\u0445 \u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u0438\u0439 (PostgreSQL)\n\nCREATE TABLE branches (\n    branch_id   INTEGER PRIMARY KEY,\n    branch_name TEXT NOT NULL,\n    city        TEXT NOT NULL,\n    region      TEXT NOT NULL,\n    opened_date DATE NOT NULL\n);\n\nCREATE TABLE clients (\n    client_id     INTEGER PRIMARY KEY,\n    full_name     TEXT NOT NULL,\n    gender        CHAR(1),\n    birth_date    DATE,\n    city          TEXT,\n    registered_at DATE NOT NULL,\n    channel       TEXT\n);\n\nCREATE TABLE tests (\n    test_id      INTEGER PRIMARY KEY,\n    test_name    TEXT NOT NULL,\n    category     TEXT NOT NULL,\n    price        NUMERIC(10,2) NOT NULL,\n    turnaround_h INTEGER NOT NULL\n);\n\nCREATE TABLE orders (\n    order_id   INTEGER PRIMARY KEY,\n    client_id  INTEGER NOT NULL REFERENCES clients(client_id),\n    branch_id  INTEGER NOT NULL REFERENCES branches(branch_id),\n    order_date DATE NOT NULL,\n    status     TEXT NOT NULL,\n    channel    TEXT\n);\n\nCREATE TABLE order_items (\n    item_id    INTEGER PRIMARY KEY,\n    order_id   INTEGER NOT NULL REFERENCES orders(order_id),\n    test_id    INTEGER NOT NULL REFERENCES tests(test_id),\n    qty        INTEGER NOT NULL DEFAULT 1,\n    item_price NUMERIC(10,2) NOT NULL\n);\n\nINSERT INTO branches VALUES\n (1,'\u0426\u0435\u043d\u0442\u0440\u0430\u043b\u044c\u043d\u044b\u0439','\u041c\u043e\u0441\u043a\u0432\u0430','\u041c\u043e\u0441\u043a\u0432\u0430','2019-03-01'),\n (2,'\u0421\u0435\u0432\u0435\u0440\u043d\u044b\u0439','\u041c\u043e\u0441\u043a\u0432\u0430','\u041c\u043e\u0441\u043a\u0432\u0430','2021-06-15'),\n (3,'\u041d\u0435\u0432\u0441\u043a\u0438\u0439','\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433','\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433','2020-01-20'),\n (4,'\u041f\u0440\u0438\u043c\u043e\u0440\u0441\u043a\u0438\u0439','\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433','\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433','2022-09-10'),\n (5,'\u0423\u0440\u0430\u043b\u043c\u0430\u0448','\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433','\u0423\u0440\u0430\u043b','2021-11-05'),\n (6,'\u041a\u0438\u0440\u043e\u0432\u0441\u043a\u0438\u0439','\u041d\u043e\u0432\u043e\u0441\u0438\u0431\u0438\u0440\u0441\u043a','\u0421\u0438\u0431\u0438\u0440\u044c','2023-02-14');\n\nINSERT INTO clients VALUES\n (1,'\u0418\u0432\u0430\u043d\u043e\u0432\u0430 \u0410\u043d\u043d\u0430','F','1990-05-12','\u041c\u043e\u0441\u043a\u0432\u0430','2024-01-10','organic'),\n (2,'\u041f\u0435\u0442\u0440\u043e\u0432 \u0421\u0435\u0440\u0433\u0435\u0439','M','1985-11-23','\u041c\u043e\u0441\u043a\u0432\u0430','2024-01-15','yandex_direct'),\n (3,'\u0421\u043c\u0438\u0440\u043d\u043e\u0432\u0430 \u041e\u043b\u044c\u0433\u0430','F','1978-03-30','\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433','2024-02-01','organic'),\n (4,'\u041a\u0443\u0437\u043d\u0435\u0446\u043e\u0432 \u0414\u043c\u0438\u0442\u0440\u0438\u0439','M','1995-07-19','\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433','2024-02-20','vk_ads'),\n (5,'\u041f\u043e\u043f\u043e\u0432\u0430 \u0415\u043b\u0435\u043d\u0430','F','2001-09-05','\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433','2024-03-02','yandex_direct'),\n (6,'\u0421\u043e\u043a\u043e\u043b\u043e\u0432 \u0418\u0432\u0430\u043d','M','1965-12-01','\u041c\u043e\u0441\u043a\u0432\u0430','2024-03-11','referral'),\n (7,'\u041b\u0435\u0431\u0435\u0434\u0435\u0432\u0430 \u041c\u0430\u0440\u0438\u044f','F','1988-04-17','\u041d\u043e\u0432\u043e\u0441\u0438\u0431\u0438\u0440\u0441\u043a','2024-04-01','organic'),\n (8,'\u041a\u043e\u0437\u043b\u043e\u0432 \u0410\u0440\u0442\u0451\u043c','M','1999-08-25','\u041c\u043e\u0441\u043a\u0432\u0430','2024-04-18','google_ads'),\n (9,'\u041d\u043e\u0432\u0438\u043a\u043e\u0432\u0430 \u0414\u0430\u0440\u044c\u044f','F','1992-02-14','\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433','2024-05-05','vk_ads'),\n (10,'\u041c\u043e\u0440\u043e\u0437\u043e\u0432 \u041f\u0430\u0432\u0435\u043b','M','1970-06-08','\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433','2024-05-22',NULL),\n (11,'\u0412\u043e\u043b\u043a\u043e\u0432\u0430 \u041a\u0441\u0435\u043d\u0438\u044f','F','2003-01-30','\u041c\u043e\u0441\u043a\u0432\u0430','2024-06-10','yandex_direct'),\n (12,'\u0417\u0430\u0439\u0446\u0435\u0432 \u0420\u043e\u043c\u0430\u043d','M','1982-10-11','\u041d\u043e\u0432\u043e\u0441\u0438\u0431\u0438\u0440\u0441\u043a','2024-06-27','organic'),\n (13,'\u0413\u0440\u0438\u0433\u043e\u0440\u044c\u0435\u0432\u0430 \u0418\u043d\u043d\u0430','F','1996-03-08','\u041c\u043e\u0441\u043a\u0432\u0430','2024-07-05','google_ads'),\n (14,'\u0424\u0451\u0434\u043e\u0440\u043e\u0432 \u041e\u043b\u0435\u0433','M','1975-12-19','\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433','2024-07-14','referral');\n\nINSERT INTO tests VALUES\n (1,'\u041e\u0431\u0449\u0438\u0439 \u0430\u043d\u0430\u043b\u0438\u0437 \u043a\u0440\u043e\u0432\u0438','\u0413\u0435\u043c\u0430\u0442\u043e\u043b\u043e\u0433\u0438\u044f',650,24),\n (2,'\u0413\u043b\u044e\u043a\u043e\u0437\u0430','\u0411\u0438\u043e\u0445\u0438\u043c\u0438\u044f',300,24),\n (3,'\u0422\u0422\u0413 (\u0442\u0438\u0440\u0435\u043e\u0442\u0440\u043e\u043f\u043d\u044b\u0439 \u0433\u043e\u0440\u043c\u043e\u043d)','\u0413\u043e\u0440\u043c\u043e\u043d\u044b',700,48),\n (4,'\u0412\u0438\u0442\u0430\u043c\u0438\u043d D','\u0413\u043e\u0440\u043c\u043e\u043d\u044b',1900,72),\n (5,'\u0424\u0435\u0440\u0440\u0438\u0442\u0438\u043d','\u0411\u0438\u043e\u0445\u0438\u043c\u0438\u044f',850,24),\n (6,'\u041f\u0426\u0420 SARS-CoV-2','\u0418\u043d\u0444\u0435\u043a\u0446\u0438\u0438',1500,24),\n (7,'\u041b\u0438\u043f\u0438\u0434\u043d\u044b\u0439 \u043f\u0440\u043e\u0444\u0438\u043b\u044c','\u0411\u0438\u043e\u0445\u0438\u043c\u0438\u044f',1200,24),\n (8,'\u0410\u043d\u0442\u0438\u0442\u0435\u043b\u0430 \u043a \u043a\u043e\u0440\u0438 IgG','\u0418\u043d\u0444\u0435\u043a\u0446\u0438\u0438',900,72),\n (9,'\u0413\u043b\u0438\u043a\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u044b\u0439 \u0433\u0435\u043c\u043e\u0433\u043b\u043e\u0431\u0438\u043d','\u0411\u0438\u043e\u0445\u0438\u043c\u0438\u044f',750,24),\n (10,'\u0422\u0435\u0441\u0442\u043e\u0441\u0442\u0435\u0440\u043e\u043d','\u0413\u043e\u0440\u043c\u043e\u043d\u044b',800,48);\n\nINSERT INTO orders VALUES\n (101,1,1,'2024-06-03','completed','organic'),\n (102,2,1,'2024-06-05','completed','yandex_direct'),\n (103,3,3,'2024-06-07','completed','organic'),\n (104,1,1,'2024-06-20','completed','email'),\n (105,4,3,'2024-06-22','cancelled','vk_ads'),\n (106,5,5,'2024-07-01','completed','yandex_direct'),\n (107,6,1,'2024-07-03','completed','referral'),\n (108,2,2,'2024-07-08','completed','organic'),\n (109,7,6,'2024-07-10','in_progress','organic'),\n (110,8,1,'2024-07-12','completed','google_ads'),\n (111,3,3,'2024-07-15','completed','yandex_direct'),\n (112,9,4,'2024-07-18','completed','vk_ads'),\n (113,1,2,'2024-07-20','completed','organic'),\n (114,10,5,'2024-07-22','cancelled','organic'),\n (115,11,1,'2024-07-25','completed','yandex_direct'),\n (116,12,6,'2024-07-28','completed','organic'),\n (117,4,3,'2024-07-29','completed','email'),\n (118,5,5,'2024-07-30','in_progress','yandex_direct');\n\nINSERT INTO order_items VALUES\n (1,101,1,1,650),(2,101,2,1,300),(3,101,5,1,850),\n (4,102,7,1,1200),(5,102,2,1,300),\n (6,103,3,1,700),(7,103,4,1,1900),\n (8,104,1,1,650),\n (9,105,6,2,1500),\n (10,106,9,1,750),(11,106,2,1,300),\n (12,107,7,1,1200),(13,107,10,1,800),\n (14,108,1,1,650),\n (15,109,6,1,1500),\n (16,110,3,1,700),(17,110,4,1,1900),(18,110,1,1,650),\n (19,111,5,1,850),\n (20,112,8,1,900),(21,112,1,1,650),\n (22,113,2,1,300),\n (23,114,7,1,1200),\n (24,115,4,1,1900),(25,115,1,1,650),\n (26,116,9,1,750),\n (27,117,3,1,700),(28,117,10,1,800),\n (29,118,1,1,650),(30,118,5,1,850);\n";
+const TASKS = [["Базовый", "Филиалы в Москве", "Выведите название и город всех филиалов в Москве, отсортированные по названию.", "SELECT branch_name, city\nFROM branches\nWHERE city = 'Москва'\nORDER BY branch_name;"], ["Базовый", "Дорогие тесты", "Выведите название и цену тестов дороже 800 ₽, по убыванию цены.", "SELECT test_name, price\nFROM tests\nWHERE price > 800\nORDER BY price DESC;"], ["Базовый", "Заказы по статусу", "Посчитайте количество заказов в разрезе статуса, по убыванию количества.", "SELECT status, COUNT(*) AS cnt\nFROM orders\nGROUP BY status\nORDER BY cnt DESC;"], ["Базовый", "Клиенты из Яндекс.Директа", "Выведите имя и город клиентов, привлечённых через yandex_direct, по алфавиту.", "SELECT full_name, city\nFROM clients\nWHERE channel = 'yandex_direct'\nORDER BY full_name;"], ["Средний", "Выручка по филиалам", "Посчитайте выручку по завершённым (completed) заказам в разрезе филиала. Выручка = сумма qty * item_price. По убыванию.", "SELECT b.branch_name, SUM(oi.qty * oi.item_price) AS revenue\nFROM orders o\nJOIN branches b ON b.branch_id = o.branch_id\nJOIN order_items oi ON oi.order_id = o.order_id\nWHERE o.status = 'completed'\nGROUP BY b.branch_name\nORDER BY revenue DESC;"], ["Средний", "Топ-3 теста", "Найдите топ-3 теста по числу назначений в завершённых заказах (по сумме qty).", "SELECT t.test_name, SUM(oi.qty) AS n\nFROM order_items oi\nJOIN orders o ON o.order_id = oi.order_id AND o.status = 'completed'\nJOIN tests t ON t.test_id = oi.test_id\nGROUP BY t.test_name\nORDER BY n DESC, t.test_name\nLIMIT 3;"], ["Средний", "Повторные клиенты", "Выведите клиентов, сделавших больше одного заказа, с количеством заказов. По убыванию.", "SELECT c.full_name, COUNT(*) AS orders_cnt\nFROM clients c\nJOIN orders o ON o.client_id = c.client_id\nGROUP BY c.client_id, c.full_name\nHAVING COUNT(*) > 1\nORDER BY orders_cnt DESC, c.full_name;"], ["Средний", "Средний чек по каналам", "Посчитайте средний чек завершённого заказа в разрезе канала заказа (channel в orders). Сначала сумма по заказу, потом среднее. По убыванию.", "WITH order_totals AS (\n  SELECT o.order_id, o.channel, SUM(oi.qty * oi.item_price) AS total\n  FROM orders o\n  JOIN order_items oi ON oi.order_id = o.order_id\n  WHERE o.status = 'completed'\n  GROUP BY o.order_id, o.channel\n)\nSELECT channel, ROUND(AVG(total), 2) AS avg_check, COUNT(*) AS n\nFROM order_totals\nGROUP BY channel\nORDER BY avg_check DESC;"], ["Продвинутый", "Нумерация заказов клиента", "Для каждого заказа выведите его порядковый номер внутри клиента по дате (оконная функция ROW_NUMBER).", "SELECT o.client_id, o.order_id, o.order_date,\n       ROW_NUMBER() OVER (PARTITION BY o.client_id ORDER BY o.order_date) AS rn\nFROM orders o\nORDER BY o.client_id, rn;"], ["Продвинутый", "Доля выручки категории", "Посчитайте выручку каждой категории тестов (по completed) и её долю в % от общей выручки. Оконный SUM без PARTITION.", "WITH cat AS (\n  SELECT t.category, SUM(oi.qty * oi.item_price) AS rev\n  FROM order_items oi\n  JOIN orders o ON o.order_id = oi.order_id AND o.status = 'completed'\n  JOIN tests t ON t.test_id = oi.test_id\n  GROUP BY t.category\n)\nSELECT category, rev,\n       ROUND(100.0 * rev / SUM(rev) OVER (), 1) AS pct\nFROM cat\nORDER BY rev DESC;"], ["Продвинутый", "Первый заказ клиента", "Для каждого клиента, у которого есть заказы, выведите его самый первый заказ (по дате, при равенстве — по order_id).", "WITH ranked AS (\n  SELECT o.*,\n         ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY order_date, order_id) AS rn\n  FROM orders o\n)\nSELECT client_id, order_id, order_date\nFROM ranked\nWHERE rn = 1\nORDER BY client_id;"], ["Продвинутый", "Накопительная выручка", "Посчитайте месячную выручку (completed) и накопительный итог по месяцам.", "WITH m AS (\n  SELECT to_char(o.order_date, 'YYYY-MM') AS ym,\n         SUM(oi.qty * oi.item_price) AS rev\n  FROM orders o\n  JOIN order_items oi ON oi.order_id = o.order_id\n  WHERE o.status = 'completed'\n  GROUP BY to_char(o.order_date, 'YYYY-MM')\n)\nSELECT ym, rev,\n       SUM(rev) OVER (ORDER BY ym) AS running_total\nFROM m\nORDER BY ym;"], ["Продвинутый", "Клиенты без заказов", "Найдите клиентов, которые ни разу не делали заказ (LEFT JOIN + IS NULL или NOT EXISTS).", "SELECT c.client_id, c.full_name\nFROM clients c\nLEFT JOIN orders o ON o.client_id = c.client_id\nWHERE o.order_id IS NULL\nORDER BY c.client_id;"]];
+let db=null, cur=0;
+
+const $=id=>document.getElementById(id);
+const lvClass=l=>l==='Базовый'?'b':l==='Средний'?'m':'a';
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+(async()=>{
+  try{
+    db=new PGlite();
+    await db.exec(SCHEMA);
+    $('boot').classList.add('gone');
+    setTimeout(()=>$('boot').remove(),450);
+    $('runBtn').disabled=false;
+    buildSchemaList();
+    buildNav();
+    select(0);
+  }catch(e){
+    $('bootRing').style.display='none';
+    $('bootMsg').innerHTML='<div class="err">Не удалось загрузить PostgreSQL.<br>'+esc(e.message)+
+      '<br><br>PGlite грузится с CDN jsdelivr при первом открытии — нужен интернет. Проверьте соединение и обновите страницу.</div>';
+  }
+})();
+
+function setStatus(html){ $('status').innerHTML=html; }
+
+function buildNav(){
+  const nav=$('taskNav'); let last='';
+  TASKS.forEach((t,i)=>{
+    const[lv,title]=t;
+    if(lv!==last){ last=lv;
+      const h=document.createElement('div'); h.className='grp-title'; h.textContent=lv; nav.appendChild(h);
+    }
+    const d=document.createElement('div'); d.className='task'; d.dataset.i=i;
+    d.innerHTML='<span class="lv '+lvClass(lv)+'">'+lv[0]+'</span><div class="nm">'+esc(title)+'</div>';
+    d.onclick=()=>select(i); nav.appendChild(d);
+  });
+}
+
+async function buildSchemaList(){
+  const res=await db.query(`
+    SELECT table_name, column_name, data_type
+    FROM information_schema.columns
+    WHERE table_schema='public'
+    ORDER BY table_name, ordinal_position`);
+  const box=$('schemaList'); const byT={};
+  for(const r of res.rows){ (byT[r.table_name] ||= []).push(r.column_name+' '+shortType(r.data_type)); }
+  const order=['branches','clients','tests','orders','order_items'];
+  for(const t of order){
+    if(!byT[t]) continue;
+    const el=document.createElement('div');
+    el.innerHTML='<div class="tn">'+t+'</div><div class="cols">'+byT[t].join('<br>')+'</div>';
+    box.appendChild(el);
+  }
+}
+function shortType(t){
+  return ({'integer':'int','character varying':'text','character':'char','numeric':'numeric',
+    'text':'text','date':'date'}[t])||t;
+}
+
+function select(i){
+  cur=i;
+  const[lv,title,prompt,sql]=TASKS[i];
+  document.querySelectorAll('.task').forEach(t=>t.classList.toggle('on',+t.dataset.i===i));
+  $('pMeta').innerHTML='<span class="lv '+lvClass(lv)+'">'+lv+'</span>';
+  $('pTitle').textContent=title;
+  $('pText').textContent=prompt;
+  $('sql').value='';
+  $('out').innerHTML='';
+  $('solText').textContent=sql;
+  $('solBox').style.display='none';
+  $('solBox').open=false;
+  setStatus('<span class="muted">Готово к запросу.</span>');
+  $('sql').focus();
+}
+
+function fmtVal(v){
+  if(v===null||v===undefined) return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);   // дата без времени
+  return String(v);
+}
+
+async function runRaw(q){
+  const res=await db.query(q);
+  const cols=res.fields ? res.fields.map(f=>f.name) : (res.rows[0]?Object.keys(res.rows[0]):[]);
+  const vals=res.rows.map(r=>cols.map(c=>fmtVal(r[c])));
+  return {cols,vals};
+}
+
+async function run(){
+  const q=$('sql').value.trim();
+  $('solBox').style.display='block';
+  if(!q){ setStatus('<span class="muted">Пустой запрос.</span>'); $('out').innerHTML=''; return null; }
+  try{
+    const t0=performance.now();
+    const {cols,vals}=await runRaw(q);
+    const ms=(performance.now()-t0).toFixed(1);
+    setStatus('<span class="ok">✓ Выполнено</span> <span class="muted">· '+vals.length+' строк · '+ms+' мс</span>');
+    renderTable(cols,vals);
+    return {cols,vals};
+  }catch(e){
+    setStatus('<span class="err">✗ Ошибка выполнения</span>');
+    $('out').innerHTML='<div class="errbox">'+esc(e.message)+'</div>';
+    return null;
+  }
+}
+
+function renderTable(cols,vals){
+  if(!cols.length){ $('out').innerHTML='<div class="status muted">Запрос не вернул столбцов.</div>'; return; }
+  let h='<table class="grid"><thead><tr>';
+  cols.forEach(c=>h+='<th>'+esc(c)+'</th>'); h+='</tr></thead><tbody>';
+  vals.forEach(r=>{ h+='<tr>'; r.forEach(v=>{
+    h+='<td>'+(v===null?'<span class="nullv">NULL</span>':esc(v))+'</td>';
+  }); h+='</tr>'; });
+  h+='</tbody></table>';
+  if(!vals.length) h+='<div class="status muted" style="padding-top:10px">0 строк.</div>';
+  $('out').innerHTML=h;
+}
+
+async function check(){
+  const mine=await run();
+  if(!mine) return;
+  const[,,,refSql]=TASKS[cur];
+  let ref;
+  try{ ref=await runRaw(refSql); }
+  catch(e){ setStatus($('status').innerHTML+' <span class="err">· эталон не выполнился</span>'); return; }
+
+  const key=o=>o.vals.map(r=>r.map(v=>v===null?'∅':v).join('\u0001'));
+  const mineRows=key(mine), refRows=key(ref);
+
+  const ordered = JSON.stringify(mineRows)===JSON.stringify(refRows);
+  const bag=a=>{const m={};a.forEach(x=>m[x]=(m[x]||0)+1);return m;};
+  const sameBag=JSON.stringify(bag(mineRows))===JSON.stringify(bag(refRows));
+
+  let badge;
+  if(ordered) badge='<span class="match yes">✓ Совпадает с эталоном (строки и порядок)</span>';
+  else if(sameBag) badge='<span class="match warn">≈ Те же строки, другой порядок (возможно, нет ORDER BY)</span>';
+  else badge='<span class="match no">✗ Отличается · у вас '+mine.vals.length+', в эталоне '+ref.vals.length+' строк</span>';
+  setStatus($('status').innerHTML+' &nbsp; '+badge);
+}
+
+$('runBtn').onclick=run;
+$('checkBtn').onclick=check;
+$('clearBtn').onclick=()=>{$('sql').value='';$('out').innerHTML='';setStatus('<span class="muted">Очищено.</span>');$('sql').focus();};
+$('sql').addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();run();}
+  if(e.key==='Tab'){e.preventDefault();const s=e.target.selectionStart,en=e.target.selectionEnd;
+    e.target.value=e.target.value.slice(0,s)+'  '+e.target.value.slice(en);e.target.selectionStart=e.target.selectionEnd=s+2;}
+});
+</script>
+</body>
+</html>
